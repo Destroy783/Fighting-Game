@@ -1,0 +1,515 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fighting Game</title>
+    <style>
+    canvas {
+    position:relative;
+    image-rendering:pixelated;
+    width: 100%;
+    top:50%;
+    transform:translateY(-50%)
+    }
+    body{
+        background-color: #ebebeb;
+    }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="300px" height="150px"></canvas>
+    <script>
+        //#region initialize important const
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+
+        var spriteSheet = new Image();
+        spriteSheet.src = "spriteSheet.png"
+    
+        //#endregion
+
+        //#region sprite offsets
+
+        const backgroundImage ={sx:0, sy:79, sWidth:300, sHeight:150}
+        const backgroundStart ={sx:0, sy:229, sWidth:300, sHeight:150}
+        const player1HealthImg ={sx:55, sy:1, sWidth:72, sHeight:13}
+        const player2HealthImg = {sx:55, sy:14, sWidth:73, sHeight:13}
+        const winScreen = [
+            {sx:0, sy:529, sWidth:300, sHeight:150},
+            {sx:0, sy:379, sWidth:300, sHeight:150},
+        ]
+
+        const playerBodyRight = [
+            {sx:0, sy:1, sWidth:11, sHeight:33, armXAd:6, armYAd:15},
+            {sx:11, sy:1, sWidth:11, sHeight:33, armXAd:6, armYAd:14},
+            {sx:22, sy:1, sWidth:11, sHeight:33, armXAd:6, armYAd:13},
+            {sx:33, sy:1, sWidth:11, sHeight:33, armXAd:6, armYAd:14},
+            {sx:44, sy:1, sWidth:11, sHeight:33, armXAd:6, armYAd:22},
+        ]
+
+        const playerArmsRight = [
+            {sx:1, sy:34, sWidth:5, sHeight:5, x:0, y:0},//idle 1
+            {sx:7, sy:34, sWidth:10, sHeight:5, x:-1,y:0},// punch 1
+            {sx:17, sy:34, sWidth:15, sHeight:5, x:-4, y:0}, // punch 2
+            {sx:56, sy:27, sWidth:10, sHeight:7, x:0, y:-1}, // heal 1
+            {sx:66, sy:27, sWidth:14, sHeight:9, x:-3, y:0}, // heal 2
+            {sx:80, sy:27, sWidth:17, sHeight:8, x:-3, y:-2}, // heal 3
+            {sx:97, sy:27, sWidth:15, sHeight:15, x:-3, y:-9} // heal 4
+        ]
+
+        const playerBodyLeft = [
+
+            {sx:33, sy:40, sWidth:11, sHeight:32, armXAd:0, armYAd:15},            
+            {sx:0, sy:40, sWidth:11, sHeight:32, armXAd:0, armYAd:14},
+            {sx:11, sy:40, sWidth:11, sHeight:32, armXAd:0, armYAd:13},
+            {sx:22, sy:40, sWidth:11, sHeight:32, armXAd:0, armYAd:14},
+            {sx:44, sy:40, sWidth:11, sHeight:33, armXAd:0, armYAd:22},      
+        ]
+
+        const playerArmsLeft = [
+            {sx:38, sy:73, sWidth:5, sHeight:5, x:0, y:0},
+            {sx:27, sy:73, sWidth:10, sHeight:5, x:-1, y:0},
+            {sx:12, sy:73, sWidth:15, sHeight:5, x:-4, y:0},
+            {sx:102, sy:42, sWidth:10, sHeight:7, x:-4, y:-2},
+            {sx:88, sy:42, sWidth:14, sHeight:9, x:-4, y:0},
+            {sx:71, sy:42, sWidth:17, sHeight:9, x:-9, y:-2},
+            {sx:56, sy:42, sWidth:15, sHeight:15, x:-7, y:-9},
+        ]
+        const playerDeathLeft = [
+            {sx:128, sy:0, sWidth:46, sHeight:34},
+            {sx:174, sy:0, sWidth:46, sHeight:34},
+            {sx:220, sy:0, sWidth:46, sHeight:34},
+            {sx:266, sy:0, sWidth:46, sHeight:34},
+            {sx:312, sy:0, sWidth:46, sHeight:34},
+            {sx:358, sy:0, sWidth:46, sHeight:34},
+            {sx:404, sy:0, sWidth:46, sHeight:34},
+            {sx:450, sy:0, sWidth:46, sHeight:34},
+        ]
+        const playerDeathRight = [
+            {sx:450, sy:34, sWidth:46, sHeight:34},
+            {sx:404, sy:34, sWidth:46, sHeight:34},
+            {sx:358, sy:34, sWidth:46, sHeight:34},
+            {sx:312, sy:34, sWidth:46, sHeight:34},
+            {sx:266, sy:34, sWidth:46, sHeight:34},
+            {sx:220, sy:34, sWidth:46, sHeight:34},
+            {sx:174, sy:34, sWidth:46, sHeight:34},
+            {sx:128, sy:34, sWidth:46, sHeight:34},
+        ]
+        //#endregion
+
+        //#region player constructor
+
+        let playerArr = [];
+        class Player{
+            constructor(bodySprites, armSprites, direction){
+                this.bodySprites = bodySprites;
+                this.armSprites = armSprites;
+                this.direction = direction;
+                //Coordinates from bottom left corner
+                this.x = 0;
+                this.y = 0;
+
+                this.index = playerArr.length;
+
+                this.bodyIndex = 0;
+                this.armIndex = 0;
+
+                this.health = 100;
+
+
+                this.deathIndex = 0;
+                this.draw = ()=>{
+                    if(won&&this.index==winner){
+                        if(this.deathIndex>playerDeathLeft.length - 1){
+                            this.deathIndex = playerDeathLeft.length - 1
+                        }
+                        if(this.direction==-1){
+                            let tempBody = playerDeathRight[this.deathIndex];
+                            ctx.drawImage(spriteSheet, tempBody.sx, tempBody.sy, tempBody.sWidth, tempBody.sHeight, this.x, this.y-2, tempBody.sWidth, tempBody.sHeight);
+                        }else{
+                            let tempBody = playerDeathLeft[this.deathIndex];
+                            ctx.drawImage(spriteSheet, tempBody.sx, tempBody.sy, tempBody.sWidth, tempBody.sHeight, this.x-34, this.y-2, tempBody.sWidth, tempBody.sHeight);
+                        }
+                        this.deathIndex++
+                        return
+                    }
+                    if(won){
+                        this.armIndex = 2;
+                    }
+                    let tempBody = this.bodySprites[this.bodyIndex];
+                    let tempArms = this.armSprites[this.armIndex];
+
+                    ctx.drawImage(spriteSheet, tempBody.sx, tempBody.sy, tempBody.sWidth, tempBody.sHeight, this.x, this.y, tempBody.sWidth, tempBody.sHeight);
+                    ctx.drawImage(spriteSheet, tempArms.sx, tempArms.sy, tempArms.sWidth, tempArms.sHeight, this.x + tempBody.armXAd + tempArms.x, this.y + tempBody.armYAd + tempArms.y    , tempArms.sWidth, tempArms.sHeight);
+                }
+                //initialize input
+                this.left = 0;
+                this.right = 0;
+                this.up = 0;
+                this.down = 0;
+                this.punch = 0;
+                this.heal = 0;
+
+                this.punching = false;
+                this.punchReverse = false;
+
+                this.healing = false;
+                this.healingReverse = false;
+                this.healingAnim = [0,3,4,5,6]
+                this.healingIndex = 0;
+
+
+                this.air = false;
+                this.yV = 0;
+                this.xV = 0;
+                
+                this.speed = 2;
+                
+                this.move = ()=>{
+                    if(this.health<=0){
+                        this.health = 0;
+                        won = true;
+                        winner = this.index;
+                        setTimeout(resetGame, 5000);
+                        return
+                    }
+                    //#region punching
+                    if(!this.healing&&!this.healingReverse&&!this.punching&&!this.punchReverse){
+                        if(this.punch==1&&!this.punching&&!this.punchReverse){
+                            this.punching = true
+                        }
+                    }
+                    if(this.punching){
+                        this.armIndex++
+                        if(this.armIndex>2){
+                            this.armIndex = 2;
+                            this.punchCheck();
+                            this.punching = false;
+                            this.punchReverse = true;
+                        }
+                    }
+                    if(this.punchReverse){
+                        this.armIndex--
+                        if(this.armIndex<0){
+                            this.punchReverse = false;
+                            this.armIndex = 0;
+                        }
+                    }
+                    //#endregion
+
+                    //#region healing
+                    if(this.heal==1&&!this.healing&&!this.healingReverse){
+                        this.healing = true
+                    }
+                    if(this.healing){
+                        this.healingIndex++
+                        if(this.healingIndex>this.healingAnim.length - 1){
+                            this.healingIndex = this.healingAnim.length - 1;
+                            this.regen();
+                        }
+                        if(this.heal!=1){
+                            this.healing = false;
+                            this.healingReverse = true;
+                        }
+                        this.armIndex = this.healingAnim[this.healingIndex];
+                    }
+                    if(this.healingReverse){
+                        this.healingIndex--
+                        if(this.healingIndex<0){
+                            this.healingReverse = false;
+                            this.healingIndex = 0;
+                        }
+                        this.armIndex = this.healingAnim[this.healingIndex];
+                    }
+                    //#endregion
+                    if(this.up&&!this.air&&!this.heal&&!this.down){
+                        this.yV = 6;
+                        this.xV = this.speed * (this.right - this.left)
+                        this.air = true;
+                        if(this.bodyIndex==4){
+                            this.bodyIndex = 0;
+                        }
+                    }
+                    if(this.air){
+                        this.y-=this.yV
+                        this.x+=this.xV;
+                        this.yV--
+                        if(this.bottomLeft().y>150){
+                            this.air=false;
+                            this.y = 118;
+                        }
+                        return
+                    }
+                    if(this.down){
+                        this.bodyIndex = 4;
+                        this.x +=Math.round(this.xV)
+                        this.xV = this.xV * 0.9
+                        return
+                    }
+                    if(!this.healing&&!this.healingReverse){
+                        if(this.direction==1){
+                            this.x+=this.speed * (this.right - this.left*1.5)
+                        }else{
+                            this.x+=this.speed * (this.right*1.5 - this.left)
+                        }
+                        this.bodyIndex+=this.right - this.left
+                    };
+                
+                    this.xV = 0;
+                    if(this.bodyIndex>3){
+                        this.bodyIndex = 0
+                    }
+                    if(this.bodyIndex<0){
+                        this.bodyIndex = 3
+                    }
+                }
+
+                this.punchCheck = ()=>{
+                    for(let i=0; i<playerArr.length; i++){
+                        if(i!=this.index){
+                            let other = playerArr[i]
+                            let armX = this.x + this.bodySprites[this.bodyIndex].armXAd
+                            let armY = this.y + this.bodySprites[this.bodyIndex].armYAd
+                            if(this.direction==1){
+                                if(
+                                    other.leftSide()<this.rightSide() + 5&&
+                                    other.rightSide()>this.rightSide() &&
+                                    other.top()<armY + 4&&
+                                    other.bottom()>armY
+                                    ){
+                                        if(this.down==1){
+                                            this.x -=this.direction
+                                        }else{
+                                            this.x -=this.direction*2
+                                        }
+                                        other.x+=4 + this.right*4
+                                        other.air = true;
+                                        other.yV = 1 + this.down;
+                                        other.xV = 1 + this.down;
+                                        other.hit();
+                                    }
+                            }else{
+                                if(
+                                    other.rightSide()>this.leftSide() - 5&&
+                                    other.leftSide()<this.leftSide() &&
+                                    other.top()<armY + 4&&
+                                    other.bottom()>armY
+                                    ){
+                                        if(this.down==1){
+                                            this.x -=this.direction
+                                        }else{
+                                            this.x -=this.direction*2
+                                        }
+                                        other.x-=4 + this.left * 4
+                                        other.air = true;
+                                        other.yV = 1 + this.down;
+                                        other.xV = -1 - this.down;
+                                        other.hit();
+                                    }
+                            }
+                        }
+                    }
+                }
+
+                this.hit = ()=>{
+                    if(this.down){
+                        this.health -=1;
+                        return
+                    }
+                    this.health -= 10;
+                }
+
+                this.checkColWorld = ()=>{
+                    if(this.x<0){
+                        this.x = 0
+                    }
+                    if(this.topRight().x>300){
+                        this.x = 300 - this.bodySprites[0].sWidth;
+                    }
+                }
+
+                this.regen = ()=>{
+                    if(this.health<100){
+                    this.health +=0.5
+                    }
+                }
+                //getting corners
+                this.topLeft = ()=>{return {x:this.x, y:this.y}};
+                this.topRight = ()=>{return{x:this.x + this.bodySprites[0].sWidth,y:this.y}}
+                this.bottomLeft = ()=>{return{x:this.x, y:this.y + this.bodySprites[0].sHeight}}
+                this.bottomRight = ()=>{return{x:this.x + this.bodySprites[0].sWidth, y:this.y +this.bodySprites[0].sHeight}}
+                this.rightSide = ()=>{return this.x + this.bodySprites[0].sWidth }
+                this.leftSide = ()=>{return this.x}
+                this.top = ()=>{return this.y - this.down * 11}
+                this.bottom = ()=>{return this.y + this.bodySprites[0].sHeight}
+
+                playerArr.push(this)
+            }
+        }
+
+        //#endregion
+
+        //#region initialize players
+
+        let player1 = new Player(playerBodyRight, playerArmsRight,1);
+        player1.x = 15;
+        player1.y = 118;
+
+        let player2 = new Player(playerBodyLeft, playerArmsLeft,-1);
+        player2.x = 274;
+        player2.y = 118;
+        
+        //Actually loser technically
+        var winner = 0;
+
+        function resetGame(){
+        pressKeyToStart = true;
+        won = false;
+        player1.x = 15;
+        player1.y = 50; 
+        player1.xV = 0;
+        player1.yV = 0;
+        player1.air = true;
+        player1.health = 100;
+        player1.armIndex = 0;
+        player1.bodyIndex = 0;
+        player1.deathIndex = 0;
+
+        player2.x = 274;
+        player2.y = 50;
+        player2.xV = 0;
+        player2.yV = 0;
+        player2.air = true;
+        player2.health = 100;
+        player2.armIndex = 0;
+        player2.bodyIndex = 0;
+        player2.deathIndex = 0;
+        }
+        
+        
+        //#endregion
+
+        //#region gameloop
+        var frameRate = 22
+        var won = false
+        var pressKeyToStart = true
+        function loop(){
+            if(!won&&!pressKeyToStart){
+                update(); 
+            }
+            draw();
+            setTimeout(loop, 1000/frameRate)
+        }
+
+        loop();
+
+        
+        function update(){
+
+            //#region drawbackground
+            //#endregion
+
+            //#region updating player direction
+            if(!won){
+                if(player1.x>player2.x||player2.x<player1.x){
+                    player1.direction = -1;
+                    player1.bodySprites = playerBodyLeft;
+                    player1.armSprites = playerArmsLeft;
+
+                    
+                    player2.direction = 1;
+                    player2.bodySprites = playerBodyRight;
+                    player2.armSprites = playerArmsRight;
+                }
+                if(player2.x>player1.x||player1.x<player2.x){
+                    player1.direction = 1;
+                    player1.bodySprites = playerBodyRight;
+                    player1.armSprites = playerArmsRight;
+
+                    
+                    player2.direction = -1;
+                    player2.bodySprites = playerBodyLeft;
+                    player2.armSprites = playerArmsLeft;
+                }
+            }
+            playerArr.forEach((player)=>{player.move();player.checkColWorld();})
+
+            //drawing
+
+            
+
+        }
+
+        function draw(){
+            //background
+            ctx.drawImage(spriteSheet, backgroundImage.sx,backgroundImage.sy, 300, 150, 0, 0, 300, 150);
+
+            //players
+            playerArr.forEach((player)=>{player.draw()})
+
+            //healthbars
+            ctx.fillStyle = 'red';
+            ctx.fillRect(3,9,Math.floor(player1.health*70/100),4)
+            ctx.fillRect(Math.floor(298 - player2.health*70/100),9,Math.floor(player2.health * 70/100),4)
+            ctx.drawImage(spriteSheet, player1HealthImg.sx, player1HealthImg.sy, player1HealthImg.sWidth, player1HealthImg.sHeight,1,1,player1HealthImg.sWidth, player1HealthImg.sHeight)
+            ctx.drawImage(spriteSheet, player2HealthImg.sx, player2HealthImg.sy, player2HealthImg.sWidth, player2HealthImg.sHeight,300 - player2HealthImg.sWidth - 1,1,player2HealthImg.sWidth, player2HealthImg.sHeight)
+
+            if(pressKeyToStart){
+                ctx.drawImage(spriteSheet, backgroundStart.sx,backgroundStart.sy, 300, 150, 0, 0, 300, 150);
+            }
+            if(won){
+                let screen = winScreen[winner];
+                ctx.drawImage(spriteSheet, screen.sx,screen.sy, 300, 150, 0, 0, 300, 150);
+            }
+            
+
+        }
+
+        //#endregion
+
+        //#region input
+
+        document.addEventListener("keydown", (event)=>{
+            pressKeyToStart = false;
+            switch(event.key.toLowerCase()){
+                case 'a': player1.left = 1; break;
+                case 'd': player1.right = 1; break;
+                case 'w': player1.up = 1; break;
+                case 's': player1.down = 1; break
+                case 'v': player1.punch = 1; break;
+                case 'c': player1.heal = 1; break;
+
+                case 'l': player2.left = 1; break;
+                case `'`: player2.right = 1; break;
+                case 'p': player2.up = 1; break;
+                case ';': player2.down = 1; break;
+                case ',': player2.punch = 1; break;
+                case '.': player2.heal = 1; break;
+
+            }
+        });
+        document.addEventListener("keyup", (event)=>{
+            switch(event.key.toLowerCase()){
+                case 'a': player1.left = 0; break;
+                case 'd': player1.right = 0; break;
+                case 'w': player1.up = 0; break;
+                case 's': player1.down = 0; break
+                case 'v': player1.punch = 0; break
+                case 'c': player1.heal = 0; break;
+
+                case 'l': player2.left = 0; break;
+                case `'`: player2.right = 0; break;
+                case 'p': player2.up = 0; break;
+                case ';': player2.down = 0; break;
+                case ',': player2.punch = 0; break;
+                case '.': player2.heal = 0; break;
+                
+            }
+        });
+        //#endregion
+
+
+    </script>
+</body>
+</html>
